@@ -1,151 +1,98 @@
 import streamlit as st
 import pandas as pd
-import math
-from pathlib import Path
+import seaborn as sns
+import matplotlib.pyplot as plt
+from datetime import timedelta
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+st.set_page_config(layout="wide")
+st.title("Noise Forecast Dashboard (EMA)")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# Upload file
+uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+if uploaded_file is not None:
+    # Read and prepare data
+    df = pd.read_excel(uploaded_file, sheet_name="Noise Sample")
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+    st.write(df.head())  # Preview the first rows
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
-
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
-
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
+    df['datetime'] = pd.to_datetime(df['Date'] + ' ' + df["Time"], format='%m/%d/%Y %H:%M:%S')
 
 
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
 
-st.header(f'GDP in {to_year}', divider='gray')
+    # Add adjusted record number
+    df_A = df[df['Weight'] == 'A'].copy()
+    df_B = df[df['Weight'] == 'B'].copy()
+    df_A['RecNoAdj'] = range(len(df_A))
+    df_B['RecNoAdj'] = range(len(df_B))
+    df_A = df_A[df_A['RecNoAdj'] < 600]
+    df_B = df_B[df_B['RecNoAdj'] < 600]
 
-''
+    # Summary statistics
+    summary = df.groupby('Weight').agg({
+        'MeaValue': ['mean', 'median', 'min', 'max', 'std', 'var'],
+        'MeaValue.1': ['mean', 'median', 'min', 'max', 'std', 'var']
+    }).round(2)
+    summary.columns = ['_'.join(col) for col in summary.columns]
+    summary.reset_index(inplace=True)
 
-cols = st.columns(4)
+    # Forecast using Exponential Moving Average
+    results = {}
+    for weight in ['A', 'B']:
+        df_w = df[df['Weight'] == weight].copy()
+        df_w = df_w.set_index('datetime')
+        df_w_numeric = df_w.select_dtypes(include='number')
+        df_w_resampled = df_w_numeric.resample('s').mean().interpolate()
+        ts = df_w_resampled['MeaValue.1']
+        ema = ts.ewm(span=30, adjust=False).mean()
+        forecast_value = ema.iloc[-1]
+        forecast_index = pd.date_range(start=ts.index[-1] + timedelta(seconds=1), periods=300, freq='s')
+        forecast = pd.Series([forecast_value] * 300, index=forecast_index)
+        results[weight] = {'observed': ts, 'forecast': forecast}
 
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
+    # Prepare forecast DataFrames
+    forecast_df_A = pd.DataFrame({
+        'datetime': results['A']['forecast'].index,
+        'MeaValue.1': results['A']['forecast'].values,
+        'Weight': 'A'
+    })
+    forecast_df_B = pd.DataFrame({
+        'datetime': results['B']['forecast'].index,
+        'MeaValue.1': results['B']['forecast'].values,
+        'Weight': 'B'
+    })
 
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
+    # Plotting
+    fig, axes = plt.subplots(5, 1, figsize=(24, 22), gridspec_kw={'height_ratios': [2, 2, 2, 2, 1]})
 
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
+    sns.lineplot(ax=axes[0], data=df_A, x='RecNoAdj', y='MeaValue.1', marker='o', color='steelblue')
+    axes[0].set_title('Noise by Record No - Weight A')
+    axes[0].set_xlim([0, 600])
+    axes[0].set_ylabel('Mea Value')
 
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+    sns.lineplot(ax=axes[1], data=df_B, x='RecNoAdj', y='MeaValue.1', marker='o', color='darkorange')
+    axes[1].set_title('Noise by Record No - Weight B')
+    axes[1].set_xlim([0, 600])
+    axes[1].set_ylabel('Mea Value')
+
+    sns.lineplot(ax=axes[2], data=df[df['Weight'] == 'A'], x='datetime', y='MeaValue.1', marker='o', color='steelblue', label='Observed A')
+    sns.lineplot(ax=axes[2], data=forecast_df_A, x='datetime', y='MeaValue.1', linestyle='--', color='red', label='Forecast A')
+    axes[2].set_title('Noise by Time - Weight A')
+    axes[2].set_ylabel('Mea Value')
+    axes[2].tick_params(axis='x', rotation=25)
+    axes[2].legend()
+
+    sns.lineplot(ax=axes[3], data=df[df['Weight'] == 'B'], x='datetime', y='MeaValue.1', marker='o', color='darkorange', label='Observed B')
+    sns.lineplot(ax=axes[3], data=forecast_df_B, x='datetime', y='MeaValue.1', linestyle='--', color='blue', label='Forecast B')
+    axes[3].set_title('Noise by Time - Weight B')
+    axes[3].set_ylabel('Mea Value')
+    axes[3].tick_params(axis='x', rotation=25)
+    axes[3].legend()
+
+    axes[4].axis('off')
+    summary_text = summary.to_string(index=False)
+    axes[4].text(0.01, 0.85, "Summary Statistics by Weight", fontsize=14, fontweight='bold')
+    axes[4].text(0.01, 0.45, summary_text, family='monospace', fontsize=12)
+
+    # Render chart in Streamlit
+    st.pyplot(fig)
