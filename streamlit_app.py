@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 
 st.set_page_config(layout="wide")
-st.title("Noise Forecast Dashboard (EMA)")
+st.title("Visualization - Monitoring")
 
 # Upload file
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
@@ -18,15 +18,31 @@ if uploaded_file is not None:
 
     df['datetime'] = pd.to_datetime(df['Date'] + ' ' + df["Time"], format='%m/%d/%Y %H:%M:%S')
 
-
-
-    # Add adjusted record number
+    # Create a seconds_elapsed column for plotting over time
+    df['seconds_elapsed'] = (df['datetime'] - df['datetime'].min()).dt.total_seconds()
+    
+     # Prepare combined chart data per weight
+    # Separate by Weight
     df_A = df[df['Weight'] == 'A'].copy()
     df_B = df[df['Weight'] == 'B'].copy()
     df_A['RecNoAdj'] = range(len(df_A))
     df_B['RecNoAdj'] = range(len(df_B))
-    df_A = df_A[df_A['RecNoAdj'] < 600]
-    df_B = df_B[df_B['RecNoAdj'] < 600]
+
+    df_A1 = df_A[df_A['RecNoAdj'] < 300].copy()
+    df_A1['RecLocal'] = df_A1['RecNoAdj']
+    df_A1['Segment'] = 'First 300'
+
+    df_A2 = df_A[(df_A['RecNoAdj'] >= 300) & (df_A['RecNoAdj'] < 600)].copy()
+    df_A2['RecLocal'] = df_A2['RecNoAdj'] - 300
+    df_A2['Segment'] = 'Next 300'
+
+    df_B1 = df_B[df_B['RecNoAdj'] < 300].copy()
+    df_B1['RecLocal'] = df_B1['RecNoAdj']
+    df_B1['Segment'] = 'First 300'
+
+    df_B2 = df_B[(df_B['RecNoAdj'] >= 300) & (df_B['RecNoAdj'] < 600)].copy()
+    df_B2['RecLocal'] = df_B2['RecNoAdj'] - 300
+    df_B2['Segment'] = 'Next 300'
 
     # Summary statistics
     summary = df.groupby('Weight').agg({
@@ -62,37 +78,51 @@ if uploaded_file is not None:
         'Weight': 'B'
     })
 
+    # Fix for seconds_elapsed issue
+    start_time = df['datetime'].min()
+    forecast_df_A['seconds_elapsed'] = (forecast_df_A['datetime'] - start_time).dt.total_seconds()
+    forecast_df_B['seconds_elapsed'] = (forecast_df_B['datetime'] - start_time).dt.total_seconds()
+
     # Plotting
-    fig, axes = plt.subplots(5, 1, figsize=(24, 22), gridspec_kw={'height_ratios': [2, 2, 2, 2, 1]})
+    fig, axes = plt.subplots(5, 1, figsize=(24, 26), gridspec_kw={'height_ratios': [2, 2, 2, 2, 1]})
+    fig.suptitle("Visualization - Monitoring", fontsize=34, fontweight='bold', y=0.95)
 
-    sns.lineplot(ax=axes[0], data=df_A, x='RecNoAdj', y='MeaValue.1', marker='o', color='steelblue')
-    axes[0].set_title('Noise by Record No - Weight A')
-    axes[0].set_xlim([0, 600])
+    # Chart 1: Weight A - 300 first and next (split but same x-axis 0-299)
+    axes[0].plot(df_A1['RecLocal'], df_A1['MeaValue.1'], label='First 300', color='purple')
+    axes[0].plot(df_A2['RecLocal'], df_A2['MeaValue.1'], label='Next 300', color='blue')
+    axes[0].set_title('Noise by Record No (0–299 Twice) - Weight A')
+    axes[0].set_xlim([0, 300])
     axes[0].set_ylabel('Mea Value')
+    axes[0].legend()
 
-    sns.lineplot(ax=axes[1], data=df_B, x='RecNoAdj', y='MeaValue.1', marker='o', color='darkorange')
-    axes[1].set_title('Noise by Record No - Weight B')
-    axes[1].set_xlim([0, 600])
+    # Chart 2: Weight B (split line)
+    axes[1].plot(df_B1['RecLocal'], df_B1['MeaValue.1'], label='First 300', color='orange')
+    axes[1].plot(df_B2['RecLocal'], df_B2['MeaValue.1'], label='Next 300', color='green')
+    axes[1].set_title('Noise by Record No (0–299 Twice) - Weight B')
+    axes[1].set_xlim([0, 300])
     axes[1].set_ylabel('Mea Value')
+    axes[1].legend()
 
-    sns.lineplot(ax=axes[2], data=df[df['Weight'] == 'A'], x='datetime', y='MeaValue.1', marker='o', color='steelblue', label='Observed A')
-    sns.lineplot(ax=axes[2], data=forecast_df_A, x='datetime', y='MeaValue.1', linestyle='--', color='red', label='Forecast A')
-    axes[2].set_title('Noise by Time - Weight A')
+    # Chart 3: A by seconds_elapsed
+    sns.lineplot(ax=axes[2], data=df_A, x='seconds_elapsed', y='MeaValue.1', color='steelblue', label='Observed A')
+    sns.lineplot(ax=axes[2], data=forecast_df_A, x='seconds_elapsed', y='MeaValue.1', linestyle='--', color='red', label='Forecast A')
+    axes[2].set_title('Noise Over Time (Seconds Elapsed) - Weight A')
+    axes[2].set_xlabel('Seconds')
     axes[2].set_ylabel('Mea Value')
-    axes[2].tick_params(axis='x', rotation=25)
     axes[2].legend()
 
-    sns.lineplot(ax=axes[3], data=df[df['Weight'] == 'B'], x='datetime', y='MeaValue.1', marker='o', color='darkorange', label='Observed B')
-    sns.lineplot(ax=axes[3], data=forecast_df_B, x='datetime', y='MeaValue.1', linestyle='--', color='blue', label='Forecast B')
-    axes[3].set_title('Noise by Time - Weight B')
+    # Chart 4: B by seconds_elapsed
+    sns.lineplot(ax=axes[3], data=df_B, x='seconds_elapsed', y='MeaValue.1', color='darkorange', label='Observed B')
+    sns.lineplot(ax=axes[3], data=forecast_df_B, x='seconds_elapsed', y='MeaValue.1', linestyle='--', color='blue', label='Forecast B')
+    axes[3].set_title('Noise Over Time (Seconds Elapsed) - Weight B')
+    axes[3].set_xlabel('Seconds')
     axes[3].set_ylabel('Mea Value')
-    axes[3].tick_params(axis='x', rotation=25)
     axes[3].legend()
 
+    # Chart 5: Summary stats
     axes[4].axis('off')
     summary_text = summary.to_string(index=False)
     axes[4].text(0.01, 0.85, "Summary Statistics by Weight", fontsize=14, fontweight='bold')
     axes[4].text(0.01, 0.45, summary_text, family='monospace', fontsize=12)
 
-    # Render chart in Streamlit
     st.pyplot(fig)
