@@ -10,7 +10,7 @@ st.title("Visualization - Monitoring")
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
 if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file, sheet_name="Noise Sample")
+    df = pd.read_excel(uploaded_file)
     df['datetime'] = pd.to_datetime(df['Date'] + ' ' + df["Time"], format='%m/%d/%Y %H:%M:%S')
     df['seconds_elapsed'] = (df['datetime'] - df['datetime'].min()).dt.total_seconds()
 
@@ -61,30 +61,30 @@ if uploaded_file is not None:
         })
 
         # Plotting for this weight - now with 3 separate charts
-    fig, axes = plt.subplots(3, 1, figsize=(18, 14), gridspec_kw={'height_ratios': [2, 2, 2]})
+        fig, axes = plt.subplots(3, 1, figsize=(18, 14), gridspec_kw={'height_ratios': [2, 2, 2]})
 
-    # Chart 1: First 300 records
-    axes[0].plot(df_first['RecLocal'], df_first['MeaValue.1'], color='steelblue')
-    axes[0].set_title(f'Noise - First 300 Records (Weight {weight})')
-    axes[0].set_xlim([0, 300])
-    axes[0].set_ylabel('Mea Value')
+        # Chart 1: First 300 records
+        axes[0].plot(df_first['RecLocal'], df_first['MeaValue.1'], color='steelblue')
+        axes[0].set_title(f'Noise - First 300 Records (Weight {weight})')
+        axes[0].set_xlim([0, 300])
+        axes[0].set_ylabel('Mea Value')
 
-    # Chart 2: Last 300 records
-    axes[1].plot(df_last['RecLocal'], df_last['MeaValue.1'], color='darkorange')
-    axes[1].set_title(f'Noise - Last 300 Records (Weight {weight})')
-    axes[1].set_xlim([0, 300])
-    axes[1].set_ylabel('Mea Value')
+        # Chart 2: Last 300 records
+        axes[1].plot(df_last['RecLocal'], df_last['MeaValue.1'], color='darkorange')
+        axes[1].set_title(f'Noise - Last 300 Records (Weight {weight})')
+        axes[1].set_xlim([0, 300])
+        axes[1].set_ylabel('Mea Value')
 
-    # Chart 3: Time Series with EMA Forecast
-    axes[2].plot(ts.index, ts.values, color='steelblue', label='Observed')
-    axes[2].plot(forecast_df['datetime'], forecast_df['MeaValue.1'], color='red', linestyle='--', label='EMA Forecast')
-    axes[2].set_title(f'Noise Over Time (Seconds Elapsed) - Weight {weight}')
-    axes[2].set_xlabel('Datetime')
-    axes[2].set_ylabel('Mea Value')
-    axes[2].tick_params(axis='x', rotation=25)
-    axes[2].legend()
+        # Chart 3: Time Series with EMA Forecast
+        axes[2].plot(ts.index, ts.values, color='steelblue', label='Observed')
+        axes[2].plot(forecast_df['datetime'], forecast_df['MeaValue.1'], color='red', linestyle='--', label='EMA Forecast')
+        axes[2].set_title(f'Noise Over Time (Seconds Elapsed) - Weight {weight}')
+        axes[2].set_xlabel('Datetime')
+        axes[2].set_ylabel('Mea Value')
+        axes[2].tick_params(axis='x', rotation=25)
+        axes[2].legend()
 
-        # Show chart
+    # Show chart
     fig.suptitle("Visualization - Monitoring", fontsize=30, fontweight='bold', y=1)
     st.pyplot(fig)
 
