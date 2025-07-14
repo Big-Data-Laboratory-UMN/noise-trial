@@ -84,9 +84,9 @@ if uploaded_file is not None:
         axes[2].tick_params(axis='x', rotation=25)
         axes[2].legend()
 
-    # Show chart
-    fig.suptitle("Visualization - Monitoring", fontsize=30, fontweight='bold', y=1)
-    st.pyplot(fig)
+        # Show chart
+        fig.suptitle("Visualization - Monitoring", fontsize=30, fontweight='bold', y=1)
+        st.pyplot(fig)
 
     # Summary for all weights at bottom
     st.subheader("Summary Statistics for All Weights")
