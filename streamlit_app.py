@@ -68,12 +68,16 @@ if uploaded_file is not None:
         axes[0].set_title(f'Noise - First 300 Records (Weight {weight})')
         axes[0].set_xlim([0, 300])
         axes[0].set_ylabel('Mea Value')
+        axes[0].axhline(85, color='red', linestyle='--', linewidth=1.5, label='Threshold = 85')
+        axes[0].legend()
 
         # Chart 2: Last 300 records
         axes[1].plot(df_last['RecLocal'], df_last['MeaValue.1'], color='darkorange')
         axes[1].set_title(f'Noise - Last 300 Records (Weight {weight})')
         axes[1].set_xlim([0, 300])
         axes[1].set_ylabel('Mea Value')
+        axes[1].axhline(85, color='red', linestyle='--', linewidth=1.5, label='Threshold = 85')
+        axes[0].legend()
 
         # Chart 3: Time Series with EMA Forecast
         axes[2].plot(ts.index, ts.values, color='steelblue', label='Observed')
@@ -82,6 +86,7 @@ if uploaded_file is not None:
         axes[2].set_xlabel('Datetime')
         axes[2].set_ylabel('Mea Value')
         axes[2].tick_params(axis='x', rotation=25)
+        axes[2].axhline(85, color='red', linestyle='--', linewidth=1.5, label='Threshold = 85')
         axes[2].legend()
 
         # Show chart
